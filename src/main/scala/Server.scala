@@ -17,6 +17,10 @@ object Server extends App {
       get {
         complete("Hello, world!")
       }
+    } ~ path("test") {
+      get {
+        complete("This is the /test endpoint")
+      }
     }
 
   private val bindingFuture: Future[Http.ServerBinding] = Http().newServerAt("localhost", 8080).bind(route)
