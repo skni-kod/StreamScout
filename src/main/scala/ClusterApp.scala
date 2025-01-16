@@ -3,12 +3,20 @@ package pl.sknikod.streamscout
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Directives.*
 import akka.stream.Materializer
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import io.github.cdimascio.dotenv.Dotenv
 
 import scala.concurrent.{ExecutionContext, Future}
+
+object ApiConfig {
+  private val dotenv: Dotenv = Dotenv.load()
+
+  val botToken: String = dotenv.get("BOT_TOKEN")
+  val apiKey: String = dotenv.get("API_KEY")
+}
 
 object TwitchClusterApp extends App {
 

@@ -3,4 +3,6 @@
 target
 project/project
 project/target
+
 docs.txt
+.env

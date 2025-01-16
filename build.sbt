@@ -13,6 +13,7 @@ lazy val root = (project in file("."))
       "com.typesafe.akka" %% "akka-cluster-sharding-typed" % "2.10.0-M1",
       "com.typesafe.akka" %% "akka-http" % "10.7.0-M1",
       "com.typesafe.akka" %% "akka-serialization-jackson" % "2.10.0-M1",
-      "org.slf4j" % "slf4j-api" % "2.0.12"
+      "org.slf4j" % "slf4j-api" % "2.0.12",
+      "io.github.cdimascio" % "java-dotenv" % "5.2.2"
     )
   )
