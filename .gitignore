@@ -6,6 +6,7 @@ project/target
 
 docs.txt
 .env
+localdocs
 
 # local dev files
 Dev-*.scala
