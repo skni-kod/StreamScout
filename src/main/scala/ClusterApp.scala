@@ -1,12 +1,11 @@
 package pl.sknikod.streamscout
 
-import akka.actor.typed.ActorSystem
+import akka.actor.typed.{ActorSystem, Behavior}
+import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives.*
 import akka.stream.Materializer
-import akka.actor.typed.Behavior
-import akka.actor.typed.scaladsl.Behaviors
 import io.github.cdimascio.dotenv.Dotenv
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -43,6 +42,8 @@ object TwitchClusterApp extends App {
         }
       }
     }
+
+  // IrcBot.start()
 
   val bindingFuture: Future[Http.ServerBinding] = Http().newServerAt("0.0.0.0", 8080).bind(route)
 }

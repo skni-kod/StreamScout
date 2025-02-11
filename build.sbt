@@ -18,6 +18,7 @@ lazy val root = (project in file("."))
       "com.typesafe.akka" %% "akka-persistence-cassandra" % "1.3.0",
       "com.typesafe.akka" %% "akka-persistence-query" % "2.10.0",
       "org.slf4j" % "slf4j-api" % "2.0.12",
-      "io.github.cdimascio" % "java-dotenv" % "5.2.2"
+      "io.github.cdimascio" % "java-dotenv" % "5.2.2",
+      "org.pircbotx" % "pircbotx" % "2.1"
     )
   )
