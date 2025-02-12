@@ -43,8 +43,9 @@ object TwitchClusterApp extends App {
       }
     }
 
-  private val ircBot = IrcBot()
-  ircBot.start()
+  Channels.fromJsonFile("channels.json")
+    .fold(error => println(s"Error loading channels: $error"),
+          channels => IrcBot(channels=channels).start())
 
   val bindingFuture: Future[Http.ServerBinding] = Http().newServerAt("0.0.0.0", 8080).bind(route)
 }

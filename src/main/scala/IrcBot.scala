@@ -27,27 +27,28 @@ object Channels {
   private val MAX_CHANNELS: Int = 50
 
   def fromJsonFile(filename: String): Either[String, Channels] = {
-    try {
-      val source = Source.fromFile(filename)
-      val jsonString = source.mkString
-      source.close()
+    Option(getClass.getClassLoader.getResourceAsStream(filename)) match {
+      case Some(stream) =>
+        val source = Source.fromInputStream(stream)
+        val jsonString = source.mkString
+        source.close()
 
-      decode[List[String]](jsonString) match {
-        case Right(channels) if channels.size <= MAX_CHANNELS =>
-          Right(Channels(channels))
-        case Right(_) =>
-          Left(s"JSON contains more than $MAX_CHANNELS channels!")
-        case Left(error) =>
-          Left(s"Error parsing JSON: ${error.getMessage}")
-      }
-    } catch {
-      case e: Exception => Left(s"Error reading file: ${e.getMessage}")
+        io.circe.parser.decode[List[String]](jsonString) match {
+          case Right(channels) if channels.size <= MAX_CHANNELS =>
+            Right(Channels(channels))
+          case Right(_) =>
+            Left(s"JSON contains more than $MAX_CHANNELS channels!")
+          case Left(error) =>
+            Left(s"Error parsing JSON: ${error.getMessage}")
+        }
+
+      case None =>
+        Left(s"File $filename not found in resources!")
     }
   }
 }
 
 
-// TODO: create config json file
 class IrcBot(channels: Channels, delaySeconds: Int) {
   private val dotenv: Dotenv = Dotenv.load()
   private val oauth: String = dotenv.get("TWITCH_IRC_OAUTH")
