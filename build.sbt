@@ -19,6 +19,9 @@ lazy val root = (project in file("."))
       "com.typesafe.akka" %% "akka-persistence-query" % "2.10.0",
       "org.slf4j" % "slf4j-api" % "2.0.12",
       "io.github.cdimascio" % "java-dotenv" % "5.2.2",
-      "org.pircbotx" % "pircbotx" % "2.1"
+      "org.pircbotx" % "pircbotx" % "2.1",
+      "io.circe" %% "circe-core" % "0.14.7",
+      "io.circe" %% "circe-generic" % "0.14.7",
+      "io.circe" %% "circe-parser" % "0.14.10"
     )
   )
