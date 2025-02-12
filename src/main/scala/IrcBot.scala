@@ -6,15 +6,17 @@ import io.circe.*
 import io.circe.generic.auto.*
 import io.circe.parser.*
 import io.github.cdimascio.dotenv.Dotenv
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.pircbotx.hooks.ListenerAdapter
 import org.pircbotx.hooks.events.MessageEvent
 import org.pircbotx.{Configuration, PircBotX}
+import pl.sknikod.streamscout.infrastructure.kafka.Message
 
+import java.time.{LocalDateTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{BlockingQueue, Executors, LinkedBlockingQueue, TimeUnit}
 import scala.io.Source
-
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 case class Channels (channelsName: Set[String]) {
   require(channelsName.size <= MAX_CHANNELS, s"Cannot have more than ${MAX_CHANNELS} channels!")
@@ -59,7 +61,7 @@ object Channels {
 }
 
 
-class IrcBot(channels: Channels, delaySeconds: Int) {
+class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducer[String, Message]) {
   private val dotenv: Dotenv = Dotenv.load()
   private val oauth: String = dotenv.get("TWITCH_IRC_OAUTH")
 
@@ -67,7 +69,7 @@ class IrcBot(channels: Channels, delaySeconds: Int) {
     .setName("my_bot")
     .setServerPassword(s"oauth:$oauth")
     .addServer("irc.chat.twitch.tv", 6667)
-    .addListener(new TwitchListener())
+    .addListener(new TwitchListener(kafkaProducer))
     .buildConfiguration()
 
   private val bot: PircBotX = new PircBotX(config)
@@ -127,14 +129,18 @@ class IrcBot(channels: Channels, delaySeconds: Int) {
 
 object IrcBot {
   def apply(channels: Channels = Channels(Set("#h2p_gucio", "#demonzz1", "#delordione")),
-            delaySeconds: Int = 3): IrcBot =
-    new IrcBot(channels, delaySeconds)
+            delaySeconds: Int = 3, kafkaProducer: KafkaProducer[String, Message]): IrcBot =
+    new IrcBot(channels, delaySeconds, kafkaProducer)
 }
 
 
-class TwitchListener() extends ListenerAdapter {
+class TwitchListener(kafkaProducer: KafkaProducer[String, Message]) extends ListenerAdapter {
   override def onMessage(event: MessageEvent): Unit =
     val channel = event.getChannel.getName
     val message = event.getMessage
     println(s"[$channel] ${event.getUser.getLogin}#${event.getUser.getUserId}:   $message")
+    // TODO: cleanup
+    kafkaProducer.send(new ProducerRecord[String, Message]("messages", channel,
+      Message(channel, event.getUser.getLogin, event.getMessage,
+        LocalDateTime.ofEpochSecond(event.getTimestamp / 1000, (event.getTimestamp % 1000 * 1000000).toInt, ZoneOffset.UTC))))
 }

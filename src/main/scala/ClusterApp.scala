@@ -7,6 +7,8 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives.*
 import akka.stream.Materializer
 import io.github.cdimascio.dotenv.Dotenv
+import org.apache.kafka.clients.producer.KafkaProducer
+import pl.sknikod.streamscout.infrastructure.kafka.{KafkaConfig, Message}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -43,9 +45,12 @@ object TwitchClusterApp extends App {
       }
     }
 
+  private val kafkaConfig = KafkaConfig()
+  kafkaConfig.createTopic("messages", numPartitions = 50, replicationFactor = 1.shortValue)
+
   Channels.fromJsonFile("channels.json")
     .fold(error => println(s"Error loading channels: $error"),
-          channels => IrcBot(channels=channels).start())
+          channels => IrcBot(channels = channels, kafkaProducer = kafkaConfig.producerConfig()).start())
 
   val bindingFuture: Future[Http.ServerBinding] = Http().newServerAt("0.0.0.0", 8080).bind(route)
 }

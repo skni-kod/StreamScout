@@ -22,6 +22,7 @@ lazy val root = (project in file("."))
       "org.pircbotx" % "pircbotx" % "2.1",
       "io.circe" %% "circe-core" % "0.14.7",
       "io.circe" %% "circe-generic" % "0.14.7",
-      "io.circe" %% "circe-parser" % "0.14.10"
+      "io.circe" %% "circe-parser" % "0.14.10",
+      "org.apache.kafka" % "kafka-clients" % "3.8.0",
     )
   )
