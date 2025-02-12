@@ -2,21 +2,24 @@ package pl.sknikod.streamscout
 
 import Channels.MAX_CHANNELS
 
+import akka.actor.typed.ActorSystem
 import io.circe.*
 import io.circe.generic.auto.*
 import io.circe.parser.*
 import io.github.cdimascio.dotenv.Dotenv
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.pircbotx.hooks.ListenerAdapter
 import org.pircbotx.hooks.events.MessageEvent
 import org.pircbotx.{Configuration, PircBotX}
-import pl.sknikod.streamscout.infrastructure.kafka.Message
+import pl.sknikod.streamscout.infrastructure.kafka.{KafkaProducerConfig, Message}
 
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.{Instant, LocalDateTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{BlockingQueue, Executors, LinkedBlockingQueue, TimeUnit}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.io.Source
 import scala.jdk.CollectionConverters.*
+import scala.util.{Failure, Success}
 
 case class Channels (channelsName: Set[String]) {
   require(channelsName.size <= MAX_CHANNELS, s"Cannot have more than ${MAX_CHANNELS} channels!")
@@ -45,7 +48,7 @@ object Channels {
         val jsonString = source.mkString
         source.close()
 
-        io.circe.parser.decode[List[String]](jsonString) match {
+        parser.decode[List[String]](jsonString) match {
           case Right(channels) if channels.size <= MAX_CHANNELS =>
             Right(Channels(channels.toSet))
           case Right(_) =>
@@ -61,7 +64,9 @@ object Channels {
 }
 
 
-class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducer[String, Message]) {
+class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducerConfig)(implicit system: ActorSystem[_]) {
+  implicit val ec: ExecutionContext = system.executionContext
+
   private val dotenv: Dotenv = Dotenv.load()
   private val oauth: String = dotenv.get("TWITCH_IRC_OAUTH")
 
@@ -129,18 +134,24 @@ class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducer
 
 object IrcBot {
   def apply(channels: Channels = Channels(Set("#h2p_gucio", "#demonzz1", "#delordione")),
-            delaySeconds: Int = 3, kafkaProducer: KafkaProducer[String, Message]): IrcBot =
+            delaySeconds: Int = 3, kafkaProducer: KafkaProducerConfig)(implicit system: ActorSystem[_]): IrcBot =
     new IrcBot(channels, delaySeconds, kafkaProducer)
 }
 
 
-class TwitchListener(kafkaProducer: KafkaProducer[String, Message]) extends ListenerAdapter {
+class TwitchListener(kafkaProducer: KafkaProducerConfig)(implicit ec: ExecutionContext) extends ListenerAdapter {
   override def onMessage(event: MessageEvent): Unit =
     val channel = event.getChannel.getName
-    val message = event.getMessage
-    println(s"[$channel] ${event.getUser.getLogin}#${event.getUser.getUserId}:   $message")
-    // TODO: cleanup
-    kafkaProducer.send(new ProducerRecord[String, Message]("messages", channel,
-      Message(channel, event.getUser.getLogin, event.getMessage,
-        LocalDateTime.ofEpochSecond(event.getTimestamp / 1000, (event.getTimestamp % 1000 * 1000000).toInt, ZoneOffset.UTC))))
+    val user = event.getUser.getLogin
+    val messageContent = event.getMessage
+    val timestamp = LocalDateTime.ofInstant(Instant.ofEpochMilli(event.getTimestamp), ZoneOffset.UTC)
+
+    val message = Message(channel, user, messageContent, timestamp)
+
+    val record = new ProducerRecord[String, Message]("messages", channel, message)
+
+    kafkaProducer.sendMessage("messages", key = channel, value = message).andThen{
+      case Failure(exception) =>
+        println(s"Error sending message to Kafka: ${exception.getMessage}")
+    }
 }

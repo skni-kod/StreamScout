@@ -1,9 +1,13 @@
 package pl.sknikod.streamscout
 package infrastructure.kafka
 
+import akka.actor.typed.ActorSystem
+import akka.kafka.scaladsl.Consumer
+import akka.kafka.scaladsl.Consumer.Control
+import akka.stream.Materializer
 import io.circe.Json
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.producer.{KafkaProducer, Producer, ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import io.circe.syntax.*
 import io.circe.generic.auto.*
@@ -16,59 +20,66 @@ import org.apache.kafka.common.serialization.StringDeserializer
 
 import java.time.LocalDateTime
 import java.util.Properties
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
+import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
+import akka.stream.scaladsl.Source
+
+import scala.util.{Failure, Success}
 
 case class Message(channel: String, user: String, content: String, date: LocalDateTime)
 
 class MessageSerializer extends Serializer[Message] {
-  override def serialize(topic: String, data: Message): Array[Byte] = {
-    if (data == null) {
-      null
-    } else {
-      data.asJson.noSpaces.getBytes
-    }
-  }
+  override def serialize(topic: String, data: Message): Array[Byte] =
+    Option(data).map(_.asJson.noSpaces.getBytes).orNull
 }
 
 class MessageDeserializer extends Deserializer[Message] {
   override def deserialize(topic: String, data: Array[Byte]): Message = {
-    if (data == null) {
-      throw new IllegalArgumentException("Data cannot be null")
-    }
+    val jsonStr = Option(data).map(new String(_)).getOrElse("")
+    parse(jsonStr).flatMap(_.as[Message]).getOrElse(
+      throw new IllegalArgumentException(s"Invalid message format in topic $topic: $jsonStr")
+    )
+  }
+}
 
-    val jsonStr = new String(data)
-    parse(jsonStr) match {
-      case Right(json) =>
-        json.as[Message] match {
-          case Right(message) => message
-          case Left(_) =>
-            throw new RuntimeException(s"Invalid message format in topic $topic: $jsonStr")
-        }
-      case Left(error) =>
-        throw new RuntimeException(s"Invalid JSON in topic $topic: $error")
+case class KafkaProducerConfig()(implicit system: ActorSystem[_], materializer: Materializer) {
+  private val bootstrapServers = "localhost:9092"
+
+  private val producerSettings: ProducerSettings[String, Message] =
+    ProducerSettings(system, new StringSerializer, new MessageSerializer)
+      .withBootstrapServers(bootstrapServers)
+  
+  private val producer: Producer[String, Message] = producerSettings.createKafkaProducer()
+  
+  def sendMessage(topic: String, key: String, value: Message)(implicit ec: ExecutionContext): Future[RecordMetadata] = {
+    val record = new ProducerRecord[String, Message](topic, key, value)
+
+    Future {
+      producer.send(record).get()
     }
   }
+  
+}
+
+case class KafkaConsumerConfig()(implicit system: ActorSystem[_], materializer: Materializer) {
+  private val bootstrapServers = "localhost:9092"
+  
+  private def consumerSettings(groupId: String): ConsumerSettings[String, Message] =
+    ConsumerSettings(system, new StringDeserializer, new MessageDeserializer)
+      .withBootstrapServers(bootstrapServers)
+      .withGroupId(groupId)
+      .withProperty("auto.offset.reset", "latest")
+
+  def consumeMessages(topic: String, groupId: String): Source[ConsumerRecord[String, Message], Control] = {
+    Consumer
+      .plainSource(consumerSettings(groupId), Subscriptions.topics(topic))
+  }
+  
 }
 
 
 case class KafkaConfig() {
-
-  def producerConfig(): KafkaProducer[String, Message] =
-    val kafkaProps = new Properties()
-    kafkaProps.put("bootstrap.servers", "localhost:9092")
-    kafkaProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-    kafkaProps.put("value.serializer", classOf[MessageSerializer].getName)
-    new KafkaProducer[String, Message](kafkaProps)
-
-  def consumerConfig(groupId: String): KafkaConsumer[String, Message] =
-    val kafkaProps = new Properties()
-    kafkaProps.put("bootstrap.servers", "localhost:9092")
-    kafkaProps.put("key.deserializer", classOf[StringDeserializer].getName)
-    kafkaProps.put("value.deserializer", classOf[MessageDeserializer].getName)
-    kafkaProps.put("group.id", groupId)
-    kafkaProps.put("enable.auto.commit", "true")
-    kafkaProps.put("auto.offset.reset", "latest")
-    new KafkaConsumer[String, Message](kafkaProps)
-
+  
   private def adminConfig(): Properties = {
     val adminProps = new Properties()
     adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
