@@ -10,21 +10,31 @@ import org.pircbotx.hooks.ListenerAdapter
 import org.pircbotx.hooks.events.MessageEvent
 import org.pircbotx.{Configuration, PircBotX}
 
-import java.util.concurrent.{Executors, TimeUnit}
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{BlockingQueue, Executors, LinkedBlockingQueue, TimeUnit}
 import scala.io.Source
 
-case class Channels (channelsName: List[String]) {
+import scala.jdk.CollectionConverters._
+
+case class Channels (channelsName: Set[String]) {
   require(channelsName.size <= MAX_CHANNELS, s"Cannot have more than ${MAX_CHANNELS} channels!")
 
   def addChannel(channel: String): Either[String, Channels] =
     if (channelsName.size >= MAX_CHANNELS)
       Left(s"Cannot add more than ${MAX_CHANNELS} channels!")
     else
-      Right(Channels(channelsName :+ channel))
+      Right(Channels(channelsName + channel))
+
+  def removeChannel(channel: String): Either[String, Channels] =
+    if (!channelsName.contains(channel))
+      Left(s"Channel $channel not found in the list!")
+    else
+      Right(Channels(channelsName - channel))
+
 }
 
 object Channels {
-  private val MAX_CHANNELS: Int = 50
+  val MAX_CHANNELS: Int = 50
 
   def fromJsonFile(filename: String): Either[String, Channels] = {
     Option(getClass.getClassLoader.getResourceAsStream(filename)) match {
@@ -35,7 +45,7 @@ object Channels {
 
         io.circe.parser.decode[List[String]](jsonString) match {
           case Right(channels) if channels.size <= MAX_CHANNELS =>
-            Right(Channels(channels))
+            Right(Channels(channels.toSet))
           case Right(_) =>
             Left(s"JSON contains more than $MAX_CHANNELS channels!")
           case Left(error) =>
@@ -53,8 +63,6 @@ class IrcBot(channels: Channels, delaySeconds: Int) {
   private val dotenv: Dotenv = Dotenv.load()
   private val oauth: String = dotenv.get("TWITCH_IRC_OAUTH")
 
-  private val scheduler = Executors.newSingleThreadScheduledExecutor()
-
   private val config: Configuration = new Configuration.Builder()
     .setName("my_bot")
     .setServerPassword(s"oauth:$oauth")
@@ -64,14 +72,45 @@ class IrcBot(channels: Channels, delaySeconds: Int) {
 
   private val bot: PircBotX = new PircBotX(config)
 
+  private val channelQueue: BlockingQueue[String] = new LinkedBlockingQueue[String]()
+  channels.channelsName.foreach(channel => channelQueue.put(channel))
+
   def start(): Unit =
     val botThread = new Thread(() => bot.startBot())
     botThread.start()
 
-    joinChannelWithDelay()
+    new Thread(() => {
+      joinChannelsWithDelay()
+    }).start()
 
-  private def joinChannelWithDelay(): Unit =
-    channels.channelsName.zipWithIndex.foreach { case (channel, index) =>
+
+  def joinChannel(channel: String): Unit = {
+    if (channels.channelsName.size < Channels.MAX_CHANNELS) {
+      channels.addChannel(channel) match {
+        case Right(updatedChannels) =>
+          channelQueue.put(channel)
+          println(s"Channel $channel added to queue.")
+        case Left(error) =>
+          println(error)
+      }
+    } else {
+      println(s"Cannot add more than ${Channels.MAX_CHANNELS} channels!")
+    }
+  }
+
+  def leaveChannel(channelName: String): Unit =
+    channels.removeChannel(channelName) match
+      case Right(_) =>
+        bot.sendRaw().rawLineNow(s"PART $channelName")
+        println(s"LEAVE CHANNEL $channelName")
+      case _ =>
+
+  private def joinChannelsWithDelay(): Unit =
+    val scheduler = Executors.newSingleThreadScheduledExecutor()
+    val delay = new AtomicInteger(0)
+
+    while (true) {
+      val channel = channelQueue.take()
       scheduler.schedule(
         new Runnable {
           override def run(): Unit = {
@@ -79,14 +118,15 @@ class IrcBot(channels: Channels, delaySeconds: Int) {
             println(s"JOIN CHANNEL $channel")
           }
         },
-        index * delaySeconds,
+        delay.getAndAdd(delaySeconds),
         TimeUnit.SECONDS
       )
     }
+
 }
 
 object IrcBot {
-  def apply(channels: Channels = Channels(List("#h2p_gucio", "#demonzz1", "#delordione")),
+  def apply(channels: Channels = Channels(Set("#h2p_gucio", "#demonzz1", "#delordione")),
             delaySeconds: Int = 3): IrcBot =
     new IrcBot(channels, delaySeconds)
 }
