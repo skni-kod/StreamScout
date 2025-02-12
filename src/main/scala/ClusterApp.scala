@@ -43,7 +43,8 @@ object TwitchClusterApp extends App {
       }
     }
 
-  // IrcBot.start()
+  private val ircBot = IrcBot()
+  ircBot.start()
 
   val bindingFuture: Future[Http.ServerBinding] = Http().newServerAt("0.0.0.0", 8080).bind(route)
 }
