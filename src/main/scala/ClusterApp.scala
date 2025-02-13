@@ -11,12 +11,15 @@ import io.github.cdimascio.dotenv.Dotenv
 import org.apache.kafka.clients.producer.KafkaProducer
 import akka.kafka.{ConsumerSettings, Subscriptions}
 import akka.kafka.scaladsl.Consumer
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Source
+import akka.util.Timeout
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaConfig, KafkaConsumerConfig, KafkaProducerConfig}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
 object ApiConfig {
   private val dotenv: Dotenv = Dotenv.load()
@@ -31,11 +34,13 @@ object TwitchClusterApp extends App {
   implicit val materializer: Materializer = Materializer(system)
   implicit val executionContext: ExecutionContext = system.executionContext
 
+  //private val TypeKey: EntityTypeKey[ChannelActorTEST.Command] = EntityTypeKey[ChannelActorTEST.Command]("ChannelActor")
   private val TypeKey: EntityTypeKey[ChannelActor.Command] = EntityTypeKey[ChannelActor.Command]("ChannelActor")
   private val sharding = ClusterSharding(system)
 
   sharding.init(Entity(TypeKey) { entityContext =>
     println(s"Initializing entity for ${entityContext.entityId}")
+    //ChannelActorTEST(entityContext.entityId)
     ChannelActor(entityContext.entityId)
   })
 
@@ -45,11 +50,19 @@ object TwitchClusterApp extends App {
         parameter("channelId") { channelId =>
           val entityRef = sharding.entityRefFor(TypeKey, channelId)
 
-          entityRef ! ChannelActor.ProcessEvent(s"Event for channel $channelId")
+          //entityRef ! ChannelActorTEST.ProcessEvent(s"Event for channel $channelId")
           complete(s"Event received for channel: $channelId")
         }
       }
     }
+
+  val session = CassandraSessionRegistry(system).sessionFor(
+    "akka.persistence.cassandra"
+  )
+  session.executeWrite("SELECT release_version FROM system.local").onComplete {
+    case Success(value) => println("Cassandra connection OK")
+    case Failure(ex) => println(s"Error when connecting to Cassandra: ${ex.getMessage}")
+  }
 
   private val kafkaConfig = KafkaConfig()
   kafkaConfig.createTopic("messages", numPartitions = 50, replicationFactor = 1.shortValue)
@@ -65,13 +78,23 @@ object TwitchClusterApp extends App {
       val message = record.value()
 
       val entityRef = sharding.entityRefFor(TypeKey, channel)
-      entityRef ! ChannelActor.ProcessEvent(s"[Kafka Event for channel $channel : $message]")
+      //entityRef ! ChannelActorTEST.ProcessEvent(s"[Kafka Event for channel $channel : $message]")
+      //entityRef ! ChannelActor.NewMessage(message)
+
+      import concurrent. duration. DurationInt
+      implicit val timeout: Timeout = 3.seconds
+      val response = entityRef.ask[Boolean](ref => ChannelActor.NewMessage(message, ref))
+
+      response.onComplete {
+        case Success(res) => println(s"Message for channel $channel  has been handled correctly: $res")
+        case Failure(ex) => println(s"Error processing messages for $channel: ${ex.getMessage}")
+      }
   }
 
   val bindingFuture: Future[Http.ServerBinding] = Http().newServerAt("0.0.0.0", 8080).bind(route)
 }
 
-object ChannelActor {
+object ChannelActorTEST {
 
   sealed trait Command
   case class ProcessEvent(body: String) extends Command

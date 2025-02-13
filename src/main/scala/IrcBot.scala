@@ -141,7 +141,7 @@ object IrcBot {
 
 class TwitchListener(kafkaProducer: KafkaProducerConfig)(implicit ec: ExecutionContext) extends ListenerAdapter {
   override def onMessage(event: MessageEvent): Unit =
-    val channel = event.getChannel.getName
+    val channel = event.getChannel.getName.stripPrefix("#")
     val user = event.getUser.getLogin
     val messageContent = event.getMessage
     val timestamp = LocalDateTime.ofInstant(Instant.ofEpochMilli(event.getTimestamp), ZoneOffset.UTC)
