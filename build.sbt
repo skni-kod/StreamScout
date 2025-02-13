@@ -20,6 +20,8 @@ lazy val root = (project in file("."))
       "com.typesafe.akka" %% "akka-cluster-tools" % "2.10.1",
       "com.typesafe.akka" %% "akka-stream-kafka" % "7.0.1",
       "com.lightbend.akka" %% "akka-projection-core" % "1.6.8",
+      "com.lightbend.akka" %% "akka-projection-cassandra" % "1.6.8",
+      "com.lightbend.akka" %% "akka-projection-eventsourced" % "1.6.8",
       "org.slf4j" % "slf4j-api" % "2.0.12",
       "io.github.cdimascio" % "java-dotenv" % "5.2.2",
       "org.pircbotx" % "pircbotx" % "2.1",

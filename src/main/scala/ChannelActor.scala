@@ -2,6 +2,7 @@ package pl.sknikod.streamscout
 
 import akka.actor.typed.scaladsl.{Behaviors, Routers}
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.persistence.journal.EventAdapter
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import pl.sknikod.streamscout.handlers.TestPingActor
@@ -43,7 +44,7 @@ object ChannelActor {
         emptyState = State(),
         commandHandler = commandHandler(routers)(channelName),
         eventHandler = eventHandler(channelName)
-      )
+      ).withTagger(_ => Set("chat-tag"))
     }
 
 }

@@ -11,12 +11,16 @@ import io.github.cdimascio.dotenv.Dotenv
 import org.apache.kafka.clients.producer.KafkaProducer
 import akka.kafka.{ConsumerSettings, Subscriptions}
 import akka.kafka.scaladsl.Consumer
+import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
+import akka.persistence.query.{Offset, PersistenceQuery}
+import akka.projection.ProjectionBehavior
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaConfig, KafkaConsumerConfig, KafkaProducerConfig}
+import pl.sknikod.streamscout.projections.makeProjection
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -44,6 +48,28 @@ object TwitchClusterApp extends App {
     ChannelActor(entityContext.entityId)
   })
 
+  /*
+  val readJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+  val eventsForChat = readJournal
+    .eventsByTag("chat-tag", Offset.noOffset)
+    .map(_.event)
+    .runForeach(e => println(s"Real journal: $e"))
+   */
+
+  val session = CassandraSessionRegistry(system).sessionFor(
+    "akka.persistence.cassandra"
+  )
+  session.executeWrite("SELECT release_version FROM system.local").onComplete {
+    case Success(value) => println("Cassandra connection OK")
+    case Failure(ex) => println(s"Error when connecting to Cassandra: ${ex.getMessage}")
+  }
+
+  val projection = makeProjection(system, session)
+  val projectionActor = system.systemActorOf(
+    ProjectionBehavior(projection),
+    name = "test-projection"
+  )
+
   val route =
     path("test") {
       get {
@@ -55,14 +81,6 @@ object TwitchClusterApp extends App {
         }
       }
     }
-
-  val session = CassandraSessionRegistry(system).sessionFor(
-    "akka.persistence.cassandra"
-  )
-  session.executeWrite("SELECT release_version FROM system.local").onComplete {
-    case Success(value) => println("Cassandra connection OK")
-    case Failure(ex) => println(s"Error when connecting to Cassandra: ${ex.getMessage}")
-  }
 
   private val kafkaConfig = KafkaConfig()
   kafkaConfig.createTopic("messages", numPartitions = 50, replicationFactor = 1.shortValue)
