@@ -18,6 +18,7 @@ object TwitchTokenActor {
   case object RefreshToken extends Command
   case object Stop extends Command
   case class GetToken(replyTo: ActorRef[TokenResponse]) extends Command
+  case object Startup extends Command
 
   case class TokenResponse(token: TwitchToken)
 

@@ -26,7 +26,7 @@ import akka.stream.scaladsl.Source
 
 import scala.util.{Failure, Success}
 
-case class Message(channel: String, user: String, content: String, date: LocalDateTime)
+case class Message(channel: String, user: String, content: String, date: LocalDateTime, clientId: String)
 
 class MessageSerializer extends Serializer[Message] {
   override def serialize(topic: String, data: Message): Array[Byte] =

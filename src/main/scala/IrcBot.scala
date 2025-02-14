@@ -2,7 +2,9 @@ package pl.sknikod.streamscout
 
 import Channels.MAX_CHANNELS
 
-import akka.actor.typed.ActorSystem
+import akka.actor.typed.{ActorRef, ActorSystem}
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
+import akka.util.Timeout
 import io.circe.*
 import io.circe.generic.auto.*
 import io.circe.parser.*
@@ -12,6 +14,7 @@ import org.pircbotx.hooks.ListenerAdapter
 import org.pircbotx.hooks.events.MessageEvent
 import org.pircbotx.{Configuration, PircBotX}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaProducerConfig, Message}
+import pl.sknikod.streamscout.token.TwitchTokenActor
 
 import java.time.{Instant, LocalDateTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicInteger
@@ -63,32 +66,56 @@ object Channels {
   }
 }
 
-
-class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducerConfig)(implicit system: ActorSystem[_]) {
+// TODO: REFRESH AFTER X TIME, GET NEW TOKEN
+class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducerConfig)(clientId: String, sharding: ClusterSharding)(implicit system: ActorSystem[_]) {
   implicit val ec: ExecutionContext = system.executionContext
 
-  private val dotenv: Dotenv = Dotenv.load()
-  private val oauth: String = dotenv.get("TWITCH_IRC_OAUTH")
+  //private val dotenv: Dotenv = Dotenv.load()
+  //private val oauth: String = dotenv.get("TWITCH_IRC_OAUTH")
 
-  private val config: Configuration = new Configuration.Builder()
-    .setName("my_bot")
-    .setServerPassword(s"oauth:$oauth")
-    .addServer("irc.chat.twitch.tv", 6667)
-    .addListener(new TwitchListener(kafkaProducer))
-    .buildConfiguration()
+  var tokenActorRef: Option[EntityRef[TwitchTokenActor.Command]] = None
+  val tokenActor: EntityRef[TwitchTokenActor.Command] = sharding.entityRefFor(TwitchTokenActor.TypeKey, clientId)
+  tokenActorRef = Some(tokenActor)
 
-  private val bot: PircBotX = new PircBotX(config)
+  private def getTokenFromActor: Future[String] = {
+    import concurrent.duration.DurationInt
+    implicit val timeout: Timeout = Timeout(5.seconds)
+    tokenActor.ask[TwitchTokenActor.TokenResponse](replyTo => TwitchTokenActor.GetToken(replyTo)).map { response =>
+      response.token.accessToken
+    }
+  }
+
+  private def initializeBot(oauthToken: String): Unit = {
+    val config: Configuration = new Configuration.Builder()
+      .setName("my_bot")
+      .setServerPassword(s"oauth:$oauthToken")
+      .addServer("irc.chat.twitch.tv", 6667)
+      .addListener(new TwitchListener(kafkaProducer, clientId))
+      .buildConfiguration()
+
+    bot = Some(new PircBotX(config))
+  }
+
+  private var bot: Option[PircBotX] = None
 
   private val channelQueue: BlockingQueue[String] = new LinkedBlockingQueue[String]()
   channels.channelsName.foreach(channel => channelQueue.put(channel))
 
-  def start(): Unit =
-    val botThread = new Thread(() => bot.startBot())
-    botThread.start()
 
-    new Thread(() => {
-      joinChannelsWithDelay()
-    }).start()
+  def start(): Unit =
+    getTokenFromActor.onComplete {
+      case Success(oauthToken) =>
+        initializeBot(oauthToken)
+        val botThread = new Thread(() => bot.get.startBot())
+        botThread.start()
+
+        new Thread(() => {
+          joinChannelsWithDelay()
+        }).start()
+
+      case Failure(exception) =>
+        println(s"Failed to get token from TwitchTokenActor: ${exception.getMessage}")
+    }
 
 
   def joinChannel(channel: String): Unit = {
@@ -108,7 +135,7 @@ class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducer
   def leaveChannel(channelName: String): Unit =
     channels.removeChannel(channelName) match
       case Right(_) =>
-        bot.sendRaw().rawLineNow(s"PART $channelName")
+        bot.get.sendRaw().rawLineNow(s"PART $channelName")
         println(s"LEAVE CHANNEL $channelName")
       case _ =>
 
@@ -121,7 +148,7 @@ class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducer
       scheduler.schedule(
         new Runnable {
           override def run(): Unit = {
-            bot.sendIRC().joinChannel(channel)
+            bot.get.sendIRC().joinChannel(channel)
             println(s"JOIN CHANNEL $channel")
           }
         },
@@ -134,20 +161,20 @@ class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducer
 
 object IrcBot {
   def apply(channels: Channels = Channels(Set("#h2p_gucio", "#demonzz1", "#delordione")),
-            delaySeconds: Int = 3, kafkaProducer: KafkaProducerConfig)(implicit system: ActorSystem[_]): IrcBot =
-    new IrcBot(channels, delaySeconds, kafkaProducer)
+            delaySeconds: Int = 3, kafkaProducer: KafkaProducerConfig)(clientId: String, sharding: ClusterSharding)(implicit system: ActorSystem[_]): IrcBot =
+    new IrcBot(channels, delaySeconds, kafkaProducer)(clientId, sharding)
 }
 
 
-class TwitchListener(kafkaProducer: KafkaProducerConfig)(implicit ec: ExecutionContext) extends ListenerAdapter {
+class TwitchListener(kafkaProducer: KafkaProducerConfig, clientId: String)(implicit ec: ExecutionContext) extends ListenerAdapter {
   override def onMessage(event: MessageEvent): Unit =
     val channel = event.getChannel.getName.stripPrefix("#")
     val user = event.getUser.getLogin
     val messageContent = event.getMessage
     val timestamp = LocalDateTime.ofInstant(Instant.ofEpochMilli(event.getTimestamp), ZoneOffset.UTC)
 
-    val message = Message(channel, user, messageContent, timestamp)
-
+    val message = Message(channel, user, messageContent, timestamp, clientId)
+    
     val record = new ProducerRecord[String, Message]("messages", channel, message)
 
     kafkaProducer.sendMessage("messages", key = channel, value = message).andThen{

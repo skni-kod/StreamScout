@@ -2,7 +2,7 @@ package pl.sknikod.streamscout
 
 import akka.actor.typed.{ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
-import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityRef, EntityTypeKey}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives.*
 import akka.kafka.scaladsl.Consumer
@@ -21,9 +21,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaConfig, KafkaConsumerConfig, KafkaProducerConfig}
 import pl.sknikod.streamscout.projections.makeProjection
-import pl.sknikod.streamscout.token.{TwitchTokenActor, TwitchTokenDAO}
+import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor, TwitchTokenDAO}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 object ApiConfig {
@@ -49,6 +49,13 @@ object TwitchClusterApp extends App {
     ChannelActor(entityContext.entityId)
   })
 
+  sharding.init(
+    Entity(ChannelWriteActor.TypeKey) { entityContext =>
+      val clientId = entityContext.entityId
+      ChannelWriteActor(clientId, sharding)
+    }
+  )
+
   // READ JOURNAL
   /*
   val readJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
@@ -67,17 +74,10 @@ object TwitchClusterApp extends App {
     case Failure(ex) => println(s"Error when connecting to Cassandra: ${ex.getMessage}")
   }
 
-  // TOKEN REFRESHER
-  val tokenDao = new TwitchTokenDAO(session)
-  tokenDao.getAllTokens.foreach { tokens =>
-    tokens.foreach { token =>
-      val actor = system.systemActorOf(
-        TwitchTokenActor(token, tokenDao),
-        s"tokenActor-${token.clientId}"
-      )
-      println(s"Started token refresher for ${token.clientId}")
-    }
-  }
+  val flowManager = FlowManager(sharding, session)
+  flowManager.initializeSharding()
+  flowManager.initializeFlow()
+
 
   // PROJECTIONS
   val projection = makeProjection(system, session)
@@ -102,10 +102,6 @@ object TwitchClusterApp extends App {
   private val kafkaConfig = KafkaConfig()
   kafkaConfig.createTopic("messages", numPartitions = 50, replicationFactor = 1.shortValue)
 
-  Channels.fromJsonFile("local_channels.json")
-    .fold(error => println(s"Error loading channels: $error"),
-          channels => IrcBot(channels = channels, kafkaProducer = KafkaProducerConfig()).start())
-
   private val kafkaConsumerConfig = KafkaConsumerConfig()
   kafkaConsumerConfig.consumeMessages("messages", "messages-group")
     .runForeach { record =>
@@ -118,7 +114,8 @@ object TwitchClusterApp extends App {
 
       import concurrent. duration. DurationInt
       implicit val timeout: Timeout = 3.seconds
-      val response = entityRef.ask[Boolean](ref => ChannelActor.NewMessage(message, ref))
+      val writeActorRef: EntityRef[ChannelWriteActor.Command] = sharding.entityRefFor(ChannelWriteActor.TypeKey, message.clientId)
+      val response = entityRef.ask[Boolean](ref => ChannelActor.NewMessage(message, ref, writeActorRef))
 
       response.onComplete {
         case Success(res) => println(s"Message for channel $channel  has been handled correctly: $res")

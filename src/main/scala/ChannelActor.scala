@@ -2,6 +2,7 @@ package pl.sknikod.streamscout
 
 import akka.actor.typed.scaladsl.{Behaviors, Routers}
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
 import akka.persistence.journal.EventAdapter
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
@@ -13,14 +14,15 @@ object ChannelActor {
   case class State(messages: List[Message] = Nil)
 
   trait Command
-  case class NewMessage(message: Message, replyTo: ActorRef[Boolean]) extends Command
+  case class NewMessage(message: Message, replyTo: ActorRef[Boolean], writeActorRef: EntityRef[ChannelWriteActor.Command]) extends Command
 
   sealed trait Event
   case class MessageAdded(message: Message) extends Event
 
   def commandHandler(routers: Map[String, ActorRef[Command]])(channelName: String): (State, Command) => Effect[Event, State] = (state, command) =>
     command match {
-      case NewMessage(message, replyTo) =>
+      case NewMessage(message, replyTo, writeActorRef) =>
+        routers.get("ping").foreach(_ ! TestPingActor.TestMessage(message, writeActorRef))
         if (message.content.contains("@")) {
           routers.get("ping").foreach(_ ! TestPingActor.PingMessage(message.content))
         }
