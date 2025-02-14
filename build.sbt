@@ -29,5 +29,7 @@ lazy val root = (project in file("."))
       "io.circe" %% "circe-generic" % "0.14.7",
       "io.circe" %% "circe-parser" % "0.14.10",
       "org.apache.kafka" % "kafka-clients" % "3.8.0",
+      "com.softwaremill.sttp.client3" %% "core" % "3.10.0",
+      "com.softwaremill.sttp.client3" %% "circe" % "3.10.0"
     )
   )

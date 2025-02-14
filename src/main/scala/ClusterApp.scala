@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaConfig, KafkaConsumerConfig, KafkaProducerConfig}
 import pl.sknikod.streamscout.projections.makeProjection
+import pl.sknikod.streamscout.token.{TwitchTokenActor, TwitchTokenDAO}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -48,6 +49,7 @@ object TwitchClusterApp extends App {
     ChannelActor(entityContext.entityId)
   })
 
+  // READ JOURNAL
   /*
   val readJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
   val eventsForChat = readJournal
@@ -56,6 +58,7 @@ object TwitchClusterApp extends App {
     .runForeach(e => println(s"Real journal: $e"))
    */
 
+  // CONNECTION CHECK
   val session = CassandraSessionRegistry(system).sessionFor(
     "akka.persistence.cassandra"
   )
@@ -64,6 +67,19 @@ object TwitchClusterApp extends App {
     case Failure(ex) => println(s"Error when connecting to Cassandra: ${ex.getMessage}")
   }
 
+  // TOKEN REFRESHER
+  val tokenDao = new TwitchTokenDAO(session)
+  tokenDao.getAllTokens.foreach { tokens =>
+    tokens.foreach { token =>
+      val actor = system.systemActorOf(
+        TwitchTokenActor(token, tokenDao),
+        s"tokenActor-${token.clientId}"
+      )
+      println(s"Started token refresher for ${token.clientId}")
+    }
+  }
+
+  // PROJECTIONS
   val projection = makeProjection(system, session)
   val projectionActor = system.systemActorOf(
     ProjectionBehavior(projection),
@@ -82,6 +98,7 @@ object TwitchClusterApp extends App {
       }
     }
 
+  // KAFKA
   private val kafkaConfig = KafkaConfig()
   kafkaConfig.createTopic("messages", numPartitions = 50, replicationFactor = 1.shortValue)
 
