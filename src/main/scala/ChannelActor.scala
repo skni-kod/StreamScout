@@ -24,7 +24,7 @@ object ChannelActor {
       case NewMessage(message, replyTo, writeActorRef) =>
         routers.get("ping").foreach(_ ! TestPingActor.TestMessage(message, writeActorRef))
         if (message.content.contains("@")) {
-          routers.get("ping").foreach(_ ! TestPingActor.PingMessage(message.content))
+          routers.get("ping").foreach(_ ! TestPingActor.PingMessage(message, writeActorRef))
         }
         Effect.persist(MessageAdded(message))
           .thenReply(replyTo)(_ => true)
