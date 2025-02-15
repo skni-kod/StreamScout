@@ -2,7 +2,8 @@ package pl.sknikod.streamscout
 
 import Channels.MAX_CHANNELS
 
-import akka.actor.typed.{ActorRef, ActorSystem}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
 import akka.util.Timeout
 import io.circe.*
@@ -13,8 +14,9 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordM
 import org.pircbotx.hooks.ListenerAdapter
 import org.pircbotx.hooks.events.MessageEvent
 import org.pircbotx.{Configuration, PircBotX}
+import pl.sknikod.streamscout.IrcBot.{Command, JoinChannel, LeaveChannel, Start, TokenUpdated}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaProducerConfig, Message}
-import pl.sknikod.streamscout.token.TwitchTokenActor
+import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor}
 
 import java.time.{Instant, LocalDateTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicInteger
@@ -66,16 +68,21 @@ object Channels {
   }
 }
 
-// TODO: REFRESH AFTER X TIME, GET NEW TOKEN
-class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducerConfig)(clientId: String, sharding: ClusterSharding)(implicit system: ActorSystem[_]) {
+class IrcBot(context: ActorContext[IrcBot.Command], channels: Channels, delaySeconds: Int,
+             kafkaProducer: KafkaProducerConfig, clientId: String, sharding: ClusterSharding)(implicit system: ActorSystem[_]) {
+
   implicit val ec: ExecutionContext = system.executionContext
 
-  //private val dotenv: Dotenv = Dotenv.load()
-  //private val oauth: String = dotenv.get("TWITCH_IRC_OAUTH")
+  private var bot: Option[PircBotX] = None
+  private val channelQueue: BlockingQueue[String] = new LinkedBlockingQueue[String]()
+  channels.channelsName.foreach(channel => channelQueue.put(channel))
 
-  var tokenActorRef: Option[EntityRef[TwitchTokenActor.Command]] = None
-  val tokenActor: EntityRef[TwitchTokenActor.Command] = sharding.entityRefFor(TwitchTokenActor.TypeKey, clientId)
-  tokenActorRef = Some(tokenActor)
+  private val tokenActor: EntityRef[TwitchTokenActor.Command] =
+    sharding.entityRefFor(TwitchTokenActor.TypeKey, clientId)
+
+  tokenActor ! TwitchTokenActor.Subscribe(
+    context.messageAdapter(response => IrcBot.TokenUpdated(response.token))
+  )
 
   private def getTokenFromActor: Future[String] = {
     import concurrent.duration.DurationInt
@@ -94,56 +101,21 @@ class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducer
       .buildConfiguration()
 
     bot = Some(new PircBotX(config))
+    val botThread = new Thread(() => bot.get.startBot())
+    botThread.start()
+
+    new Thread(() => {
+      joinChannelsWithDelay()
+    }).start()
   }
 
-  private var bot: Option[PircBotX] = None
+  @volatile private var isRunning = true
 
-  private val channelQueue: BlockingQueue[String] = new LinkedBlockingQueue[String]()
-  channels.channelsName.foreach(channel => channelQueue.put(channel))
-
-
-  def start(): Unit =
-    getTokenFromActor.onComplete {
-      case Success(oauthToken) =>
-        initializeBot(oauthToken)
-        val botThread = new Thread(() => bot.get.startBot())
-        botThread.start()
-
-        new Thread(() => {
-          joinChannelsWithDelay()
-        }).start()
-
-      case Failure(exception) =>
-        println(s"Failed to get token from TwitchTokenActor: ${exception.getMessage}")
-    }
-
-
-  def joinChannel(channel: String): Unit = {
-    if (channels.channelsName.size < Channels.MAX_CHANNELS) {
-      channels.addChannel(channel) match {
-        case Right(updatedChannels) =>
-          channelQueue.put(channel)
-          println(s"Channel $channel added to queue.")
-        case Left(error) =>
-          println(error)
-      }
-    } else {
-      println(s"Cannot add more than ${Channels.MAX_CHANNELS} channels!")
-    }
-  }
-
-  def leaveChannel(channelName: String): Unit =
-    channels.removeChannel(channelName) match
-      case Right(_) =>
-        bot.get.sendRaw().rawLineNow(s"PART $channelName")
-        println(s"LEAVE CHANNEL $channelName")
-      case _ =>
-
-  private def joinChannelsWithDelay(): Unit =
+  private def joinChannelsWithDelay(): Unit = {
     val scheduler = Executors.newSingleThreadScheduledExecutor()
     val delay = new AtomicInteger(0)
 
-    while (true) {
+    while (isRunning) {
       val channel = channelQueue.take()
       scheduler.schedule(
         new Runnable {
@@ -156,14 +128,83 @@ class IrcBot(channels: Channels, delaySeconds: Int, kafkaProducer: KafkaProducer
         TimeUnit.SECONDS
       )
     }
+    scheduler.shutdown()
+  }
 
+  def behavior(): Behavior[Command] = {
+    Behaviors.receiveMessage {
+      case Start() =>
+        getTokenFromActor.onComplete {
+          case Success(oauthToken) =>
+            initializeBot(oauthToken)
+          case Failure(exception) =>
+            println(s"Failed to get token from TwitchTokenActor: ${exception.getMessage}")
+        }
+        Behaviors.same
+
+      case JoinChannel(channel) =>
+        if (channels.channelsName.size < Channels.MAX_CHANNELS) {
+          channels.addChannel(channel) match {
+            case Right(updatedChannels) =>
+              channelQueue.put(channel)
+              println(s"Channel $channel added to queue.")
+            case Left(error) =>
+              println(error)
+          }
+        } else {
+          println(s"Cannot add more than ${Channels.MAX_CHANNELS} channels!")
+        }
+        Behaviors.same
+
+      case LeaveChannel(channelName) =>
+        channels.removeChannel(channelName) match {
+          case Right(_) =>
+            bot.get.sendRaw().rawLineNow(s"PART $channelName")
+            println(s"LEAVE CHANNEL $channelName")
+          case _ =>
+        }
+        Behaviors.same
+
+      case TokenUpdated(token) =>
+        bot.foreach { b =>
+          println(s"Stopping bot for clientId $clientId...")
+          isRunning = false
+          b.close()
+        }
+
+        Thread.sleep(2000)
+
+        channelQueue.clear()
+        channels.channelsName.foreach(channelQueue.put)
+
+        println(s"Restarting bot with new token...")
+        isRunning = true
+        initializeBot(token.accessToken)
+        Behaviors.same
+    }
+  }
 }
 
 object IrcBot {
-  def apply(channels: Channels = Channels(Set("#h2p_gucio", "#demonzz1", "#delordione")),
-            delaySeconds: Int = 3, kafkaProducer: KafkaProducerConfig)(clientId: String, sharding: ClusterSharding)(implicit system: ActorSystem[_]): IrcBot =
-    new IrcBot(channels, delaySeconds, kafkaProducer)(clientId, sharding)
+  sealed trait Command
+  case class Start() extends Command
+  case class JoinChannel(channel: String) extends Command
+  case class LeaveChannel(channelName: String) extends Command
+  case class TokenUpdated(token: TwitchToken) extends Command
+
+  def apply(
+             channels: Channels,
+             delaySeconds: Int,
+             kafkaProducer: KafkaProducerConfig,
+             clientId: String,
+             sharding: ClusterSharding
+           )(implicit system: ActorSystem[_]): Behavior[Command] = {
+    Behaviors.setup { context =>
+      new IrcBot(context, channels, delaySeconds, kafkaProducer, clientId, sharding).behavior()
+    }
+  }
 }
+
 
 
 class TwitchListener(kafkaProducer: KafkaProducerConfig, clientId: String)(implicit ec: ExecutionContext) extends ListenerAdapter {
@@ -174,7 +215,7 @@ class TwitchListener(kafkaProducer: KafkaProducerConfig, clientId: String)(impli
     val timestamp = LocalDateTime.ofInstant(Instant.ofEpochMilli(event.getTimestamp), ZoneOffset.UTC)
 
     val message = Message(channel, user, messageContent, timestamp, clientId)
-    
+
     val record = new ProducerRecord[String, Message]("messages", channel, message)
 
     kafkaProducer.sendMessage("messages", key = channel, value = message).andThen{

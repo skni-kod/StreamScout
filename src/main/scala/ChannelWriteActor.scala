@@ -25,7 +25,7 @@ object ChannelWriteActor {
 
       Behaviors.receiveMessage {
         case SendMessage(channel, message) =>
-          // TODO: WRITE TO CHAT
+          // TODO: WRITE TO CHAT + SET RATE LIMITS
           println(s"WRITE TO CHAT => $channel: $message")
           Behaviors.same
       }

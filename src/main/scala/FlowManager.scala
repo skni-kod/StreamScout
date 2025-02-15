@@ -1,6 +1,8 @@
 package pl.sknikod.streamscout
 
-import akka.actor.typed.ActorSystem
+import akka.actor.typed.{ActorRef, ActorSystem}
+import akka.cluster.sharding.typed.ClusterShardingSettings
+import akka.cluster.sharding.typed.ClusterShardingSettings.PassivationStrategySettings
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity}
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import pl.sknikod.streamscout.infrastructure.kafka.KafkaProducerConfig
@@ -13,13 +15,13 @@ class FlowManager(sharding: ClusterSharding, session: CassandraSession)(implicit
   private val tokenDao = new TwitchTokenDAO(session)
   private val tokens: Map[String, TwitchToken] = Await.result(tokenDao.getAllTokens, 10.seconds).map(t => t.clientId -> t).toMap
 
-  def initializeSharding(): Unit = {
+  def initializeSharding()(implicit system: ActorSystem[_]) = {
     sharding.init(
       Entity(TwitchTokenActor.TypeKey) { entityContext =>
         val clientId = entityContext.entityId
         val token = tokens(clientId)
         TwitchTokenActor(token, tokenDao)
-      }
+      }.withSettings(ClusterShardingSettings(system).withPassivationStrategy(PassivationStrategySettings.disabled))
     )
   }
 
@@ -41,8 +43,21 @@ class FlowManager(sharding: ClusterSharding, session: CassandraSession)(implicit
         println(s"Error loading channels: $error")
       case Right(channels) =>
         val clientChannelsMap: Map[String, Set[String]] = groupChannelsByClient(channels.channelsName)
-        clientChannelsMap.foreach((clientId, channelsSet) =>
-          IrcBot(channels = Channels(channelsSet), kafkaProducer = KafkaProducerConfig())(clientId = clientId, sharding = sharding).start())
+        clientChannelsMap.foreach { case (clientId, channelsSet) =>
+          val ircBotActor: ActorRef[IrcBot.Command] =
+            system.systemActorOf(
+              IrcBot(
+                channels = Channels(channelsSet),
+                delaySeconds = 3,
+                kafkaProducer = KafkaProducerConfig(),
+                clientId = clientId,
+                sharding = sharding
+              ),
+              s"ircBot-$clientId"
+            )
+
+          ircBotActor ! IrcBot.Start()
+        }
 
   }
 
