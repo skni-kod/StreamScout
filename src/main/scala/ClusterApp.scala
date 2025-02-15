@@ -55,6 +55,10 @@ object TwitchClusterApp extends App {
       ChannelWriteActor(clientId, sharding)
     }
   )
+  
+  sharding.init(Entity(TwitchApiActor.TypeKey) { entityContext =>
+    TwitchApiActor(entityContext.entityId, sharding)
+  })
 
   // READ JOURNAL
   /*

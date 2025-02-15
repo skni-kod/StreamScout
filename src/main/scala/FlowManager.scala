@@ -57,6 +57,10 @@ class FlowManager(sharding: ClusterSharding, session: CassandraSession)(implicit
             )
 
           ircBotActor ! IrcBot.Start()
+
+          val twitchApiActor = sharding.entityRefFor(TwitchApiActor.TypeKey, clientId)
+          
+          twitchApiActor ! TwitchApiActor.Start()
         }
 
   }
