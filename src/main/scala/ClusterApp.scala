@@ -20,7 +20,7 @@ import akka.util.Timeout
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaConfig, KafkaConsumerConfig, KafkaProducerConfig}
-import pl.sknikod.streamscout.projections.{ProjectionFactory, TestProjection, makeProjection}
+import pl.sknikod.streamscout.projections.{ProjectionFactory, TestProjection}
 import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor, TwitchTokenDAO}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
