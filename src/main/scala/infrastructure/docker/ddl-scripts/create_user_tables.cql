@@ -1,6 +1,9 @@
 USE streamscout;
-CREATE TABLE IF NOT EXISTS item_popularity (
-  item_id text,
-  count counter,
-  PRIMARY KEY (item_id));
-
+CREATE TABLE last_user_messages (
+    channel TEXT,
+    username TEXT,
+    content TEXT,
+    date TIMESTAMP,
+    client_id TEXT,
+    PRIMARY KEY (channel, username)
+);

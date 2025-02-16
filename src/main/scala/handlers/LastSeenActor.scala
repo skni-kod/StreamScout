@@ -52,7 +52,7 @@ object LastSeenActor {
                     case Some(lastSeen) =>
                       val parsedDate = ZonedDateTime.parse(lastSeen.timestamp, DateTimeFormatter.ISO_DATE_TIME)
                       val formattedDate = parsedDate.withZoneSameInstant(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"))
-                      s"@${message.user} $channel był ostatnio widziany u ${lastSeen.streamer.login}, $formattedDate"
+                      s"@${message.user} $channel był ostatnio widziany u ${lastSeen.streamer.login} ($formattedDate)"
                     case None =>
                       s"@${message.user} Brak ostatniej aktywności na czacie dla $channel."
                   }

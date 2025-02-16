@@ -20,7 +20,7 @@ import akka.util.Timeout
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaConfig, KafkaConsumerConfig, KafkaProducerConfig}
-import pl.sknikod.streamscout.projections.{ProjectionFactory, TestProjection}
+import pl.sknikod.streamscout.projections.{LastMessageProjection, ProjectionFactory, TestProjection}
 import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor, TwitchTokenDAO}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -43,10 +43,14 @@ object TwitchClusterApp extends App {
   private val TypeKey: EntityTypeKey[ChannelActor.Command] = EntityTypeKey[ChannelActor.Command]("ChannelActor")
   private val sharding = ClusterSharding(system)
 
+  val session = CassandraSessionRegistry(system).sessionFor(
+    "akka.persistence.cassandra"
+  )
+
   sharding.init(Entity(TypeKey) { entityContext =>
     println(s"Initializing entity for ${entityContext.entityId}")
     //ChannelActorTEST(entityContext.entityId)
-    ChannelActor(entityContext.entityId, sharding)
+    ChannelActor(entityContext.entityId, sharding, session)
   })
 
   sharding.init(
@@ -70,9 +74,6 @@ object TwitchClusterApp extends App {
    */
 
   // CONNECTION CHECK
-  val session = CassandraSessionRegistry(system).sessionFor(
-    "akka.persistence.cassandra"
-  )
   session.executeWrite("SELECT release_version FROM system.local").onComplete {
     case Success(value) => println("Cassandra connection OK")
     case Failure(ex) => println(s"Error when connecting to Cassandra: ${ex.getMessage}")
@@ -87,10 +88,17 @@ object TwitchClusterApp extends App {
   val projectionFactory = new ProjectionFactory(system, session)
   val testProjection = projectionFactory.createProjection(
     ProjectionId("messages-test-projection", "chat"), "chat-tag", () => new TestProjection(session))
+  val lastMessageProjection = projectionFactory.createProjection(
+    ProjectionId("last-message-projection", "lm-chat"), "chat-tag", () => new LastMessageProjection(session)
+  )
 
   val projectionActor = system.systemActorOf(
     ProjectionBehavior(testProjection),
     name = "test-projection"
+  )
+  val lastMessageProjectionActor = system.systemActorOf(
+    ProjectionBehavior(lastMessageProjection),
+    name = "last-message"
   )
 
   val route =
