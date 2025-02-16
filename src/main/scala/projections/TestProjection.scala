@@ -38,15 +38,3 @@ class TestProjection(session: CassandraSession)(implicit ec: ExecutionContext) e
     Future.successful(Done)
   }
 }
-
-def makeProjection(system: ActorSystem[_], session: CassandraSession)(implicit ec: ExecutionContext) =
-  CassandraProjection.atLeastOnce(
-    projectionId = ProjectionId("messages-test-projection", "chat"),
-    sourceProvider = EventSourcedProvider.eventsByTag[ChannelActor.Event](
-      system,
-      readJournalPluginId = CassandraReadJournal.Identifier,
-      tag = "chat-tag"
-    ),
-    handler = () => new TestProjection(session)
-  )
-

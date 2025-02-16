@@ -13,14 +13,14 @@ import akka.kafka.{ConsumerSettings, Subscriptions}
 import akka.kafka.scaladsl.Consumer
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{Offset, PersistenceQuery}
-import akka.projection.ProjectionBehavior
+import akka.projection.{ProjectionBehavior, ProjectionId}
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaConfig, KafkaConsumerConfig, KafkaProducerConfig}
-import pl.sknikod.streamscout.projections.makeProjection
+import pl.sknikod.streamscout.projections.{ProjectionFactory, TestProjection, makeProjection}
 import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor, TwitchTokenDAO}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -84,9 +84,12 @@ object TwitchClusterApp extends App {
 
 
   // PROJECTIONS
-  val projection = makeProjection(system, session)
+  val projectionFactory = new ProjectionFactory(system, session)
+  val testProjection = projectionFactory.createProjection(
+    ProjectionId("messages-test-projection", "chat"), "chat-tag", () => new TestProjection(session))
+
   val projectionActor = system.systemActorOf(
-    ProjectionBehavior(projection),
+    ProjectionBehavior(testProjection),
     name = "test-projection"
   )
 
