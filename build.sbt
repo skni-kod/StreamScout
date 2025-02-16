@@ -32,5 +32,8 @@ lazy val root = (project in file("."))
       "com.softwaremill.sttp.client3" %% "core" % "3.10.0",
       "com.softwaremill.sttp.client3" %% "circe" % "3.10.0",
       "com.softwaremill.sttp.client3" %% "async-http-client-backend-future" % "3.10.1"
+    ),
+    scalacOptions ++= Seq(
+      "-Xmax-inlines", "64"
     )
   )

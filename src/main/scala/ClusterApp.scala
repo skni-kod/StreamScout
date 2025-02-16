@@ -46,7 +46,7 @@ object TwitchClusterApp extends App {
   sharding.init(Entity(TypeKey) { entityContext =>
     println(s"Initializing entity for ${entityContext.entityId}")
     //ChannelActorTEST(entityContext.entityId)
-    ChannelActor(entityContext.entityId)
+    ChannelActor(entityContext.entityId, sharding)
   })
 
   sharding.init(
