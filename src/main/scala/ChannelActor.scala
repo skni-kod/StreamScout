@@ -7,7 +7,7 @@ import akka.persistence.journal.EventAdapter
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
-import pl.sknikod.streamscout.handlers.{HelpActor, LastMessageActor, LastSeenActor, TestPingActor, Top10PlActor, TopWatchtimeActor, UptimeActor, ViewersCountActor, WatchtimeActor}
+import pl.sknikod.streamscout.handlers.{HelpActor, LastMessageActor, LastSeenActor, RecommendedStreamersActor, TestPingActor, Top10PlActor, TopWatchtimeActor, UptimeActor, ViewersCountActor, WatchtimeActor}
 import pl.sknikod.streamscout.infrastructure.kafka.Message
 
 import scala.concurrent.ExecutionContext
@@ -50,6 +50,9 @@ object ChannelActor {
         if (message.content.contains("$lastmessage")) {
           routers.get("lastmessage").foreach(_ ! LastMessageActor.GetLastMessage(message, writeActorRef))
         }
+        if (message.content.contains("$recommended")) {
+          routers.get("recommended").foreach(_ ! RecommendedStreamersActor.GetRecommendedStreams(message, writeActorRef))
+        }
         Effect.persist(MessageAdded(message))
           .thenReply(replyTo)(_ => true)
     }
@@ -70,7 +73,8 @@ object ChannelActor {
         "watchtime" -> context.spawn(Routers.pool(5)(WatchtimeActor()), "watchtimeRouter"),
         "lastseen" -> context.spawn(Routers.pool(5)(LastSeenActor()), "lastseenRouter"),
         "help" -> context.spawn(Routers.pool(5)(HelpActor()), "helpRouter"),
-        "lastmessage" -> context.spawn(Routers.pool(5)(LastMessageActor(session)), "lastmessageRouter")
+        "lastmessage" -> context.spawn(Routers.pool(5)(LastMessageActor(session)), "lastmessageRouter"),
+        "recommended" -> context.spawn(Routers.pool(5)(RecommendedStreamersActor(session)), "recommendedRouter"),
       )
 
       EventSourcedBehavior[Command, Event, State](

@@ -20,7 +20,7 @@ import akka.util.Timeout
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 import pl.sknikod.streamscout.infrastructure.kafka.{KafkaConfig, KafkaConsumerConfig, KafkaProducerConfig}
-import pl.sknikod.streamscout.projections.{LastMessageProjection, ProjectionFactory, TestProjection}
+import pl.sknikod.streamscout.projections.{LastMessageProjection, ProjectionFactory, RecommendedStreamersProjection, TestProjection}
 import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor, TwitchTokenDAO}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -91,6 +91,9 @@ object TwitchClusterApp extends App {
   val lastMessageProjection = projectionFactory.createProjection(
     ProjectionId("last-message-projection", "lm-chat"), "chat-tag", () => new LastMessageProjection(session)
   )
+  val recommendedStreamersProjection = projectionFactory.createProjection(
+    ProjectionId("recommended-streamers-projection", "rs-chat"), "chat-tag", () => RecommendedStreamersProjection(session)
+  )
 
   val projectionActor = system.systemActorOf(
     ProjectionBehavior(testProjection),
@@ -99,6 +102,10 @@ object TwitchClusterApp extends App {
   val lastMessageProjectionActor = system.systemActorOf(
     ProjectionBehavior(lastMessageProjection),
     name = "last-message"
+  )
+  val recommendedStreamersActor = system.systemActorOf(
+    ProjectionBehavior(recommendedStreamersProjection),
+    name = "recommended-streamers"
   )
 
   val route =
