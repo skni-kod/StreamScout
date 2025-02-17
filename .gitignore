@@ -11,3 +11,6 @@ src/main/resources/local_channels.json
 
 # local dev files
 Dev-*.scala
+
+# sentiment analysis model
+models

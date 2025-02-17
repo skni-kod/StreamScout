@@ -43,7 +43,7 @@ class MessageDeserializer extends Deserializer[Message] {
 }
 
 case class KafkaProducerConfig()(implicit system: ActorSystem[_], materializer: Materializer) {
-  private val bootstrapServers = "localhost:9092"
+  private val bootstrapServers = "localhost:9093"
 
   private val producerSettings: ProducerSettings[String, Message] =
     ProducerSettings(system, new StringSerializer, new MessageSerializer)
@@ -62,7 +62,7 @@ case class KafkaProducerConfig()(implicit system: ActorSystem[_], materializer: 
 }
 
 case class KafkaConsumerConfig()(implicit system: ActorSystem[_], materializer: Materializer) {
-  private val bootstrapServers = "localhost:9092"
+  private val bootstrapServers = "localhost:9093"
   
   private def consumerSettings(groupId: String): ConsumerSettings[String, Message] =
     ConsumerSettings(system, new StringDeserializer, new MessageDeserializer)
@@ -82,7 +82,7 @@ case class KafkaConfig() {
   
   private def adminConfig(): Properties = {
     val adminProps = new Properties()
-    adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9093")
     adminProps
   }
 
