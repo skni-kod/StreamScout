@@ -18,12 +18,13 @@ object HelpActor {
         val helpMessage = s"@${message.user} dostępne komendy:\n" +
         """
         watchtime [channel] [broadcaster] - watchtime na kanale  /
-        topwatchtime [channel] - ranking kanałów z największym watchtimem  /
+        topwatchtime [channel]  /
         lastseen [channel] - gdzie i kiedy był ostatnio widziany kanał  /
-        lastmessage [channel] [broadcaster] - ostatnia wiadomość  /
+        lastmessage [channel] [broadcaster]  /
         uptime [channel] - ile trwa stream  /
         viewers [channel] - ilu widzów ma kanał  /
-        top10pl - top 10 aktualnych polskich kanałów
+        top10pl - top 10 aktualnych polskich kanałów  /
+        recommended [channel] - top 5 polecanych kanałów
         """
         val cleanMessage = helpMessage.replace("\n", " ").replace("\r", " ")
         writeActorRef ! ChannelWriteActor.SendMessage(channel = message.channel, message = cleanMessage, sender = message.user)
