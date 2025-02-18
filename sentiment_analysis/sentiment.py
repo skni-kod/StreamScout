@@ -29,10 +29,13 @@ def connect_cassandra():
             user text,
             content text,
             sentiment float,
-            primary key ((channel, clientId), date)
-        ) WITH CLUSTERING ORDER BY (date DESC)
+            PRIMARY KEY ((channel, user), date)
+        ) WITH CLUSTERING ORDER BY (date DESC);
     """)
-    
+
+    session.execute("CREATE INDEX IF NOT EXISTS idx_user ON streamscout.sentiment_analysis (user);")
+    session.execute("CREATE INDEX IF NOT EXISTS idx_channel ON streamscout.sentiment_analysis (channel);")
+
     return cluster, session
 
 def get_sentiment(text):

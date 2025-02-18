@@ -7,7 +7,7 @@ import akka.persistence.journal.EventAdapter
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
-import pl.sknikod.streamscout.handlers.{HelpActor, LastMessageActor, LastSeenActor, RecommendedStreamersActor, TestPingActor, Top10PlActor, TopWatchtimeActor, UptimeActor, ViewersCountActor, WatchtimeActor}
+import pl.sknikod.streamscout.handlers.{ChannelSentimentActor, HelpActor, LastMessageActor, LastSeenActor, RecommendedStreamersActor, TestPingActor, Top10PlActor, TopWatchtimeActor, UptimeActor, UserSentimentActor, ViewersCountActor, WatchtimeActor}
 import pl.sknikod.streamscout.infrastructure.kafka.Message
 
 import scala.concurrent.ExecutionContext
@@ -53,6 +53,12 @@ object ChannelActor {
         if (message.content.contains("$recommended")) {
           routers.get("recommended").foreach(_ ! RecommendedStreamersActor.GetRecommendedStreams(message, writeActorRef))
         }
+        if (message.content.contains("$usersentiment")) {
+          routers.get("usersentiment").foreach(_ ! UserSentimentActor.GetUserSentiment(message, writeActorRef))
+        }
+        if (message.content.contains("$channelsentiment")) {
+          routers.get("channelsentiment").foreach(_ ! ChannelSentimentActor.GetChannelSentiment(message, writeActorRef))
+        }
         Effect.persist(MessageAdded(message))
           .thenReply(replyTo)(_ => true)
     }
@@ -75,6 +81,8 @@ object ChannelActor {
         "help" -> context.spawn(Routers.pool(5)(HelpActor()), "helpRouter"),
         "lastmessage" -> context.spawn(Routers.pool(5)(LastMessageActor(session)), "lastmessageRouter"),
         "recommended" -> context.spawn(Routers.pool(5)(RecommendedStreamersActor(session)), "recommendedRouter"),
+        "usersentiment" -> context.spawn(Routers.pool(5)(UserSentimentActor(session)), "usersentimentRouter"),
+        "channelsentiment" -> context.spawn(Routers.pool(5)(ChannelSentimentActor(session)), "channelsentimentRouter"),
       )
 
       EventSourcedBehavior[Command, Event, State](

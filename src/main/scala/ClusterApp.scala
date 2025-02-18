@@ -122,7 +122,7 @@ object TwitchClusterApp extends App {
 
   // KAFKA
   private val kafkaConfig = KafkaConfig()
-  kafkaConfig.createTopic("messages", numPartitions = 50, replicationFactor = 1.shortValue)
+  //kafkaConfig.createTopic("messages", numPartitions = 50, replicationFactor = 1.shortValue)
 
   private val kafkaConsumerConfig = KafkaConsumerConfig()
   kafkaConsumerConfig.consumeMessages("messages", "messages-group")
