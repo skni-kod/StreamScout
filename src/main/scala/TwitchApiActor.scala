@@ -1,21 +1,20 @@
 package pl.sknikod.streamscout
 
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import TwitchApiActor.*
+import token.{TwitchToken, TwitchTokenActor}
+
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef, EntityTypeKey}
 import akka.util.Timeout
-import pl.sknikod.streamscout.TwitchApiActor.{Command, GetChannelId, GetTop10PL, GetUptime, GetViewersCount, Start, TokenUpdated}
-import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor}
-import sttp.client3.circe.asJson
-import sttp.client3.{HttpClientSyncBackend, HttpURLConnectionBackend, Identity, Response, ResponseException, SttpBackend, UriContext, basicRequest}
-
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
 import io.circe.generic.auto.*
 import sttp.client3.asynchttpclient.future.AsyncHttpClientFutureBackend
+import sttp.client3.circe.asJson
+import sttp.client3.{Response, ResponseException, SttpBackend, UriContext, basicRequest}
 
-import java.time.{Duration, Instant, ZonedDateTime}
-import java.time.format.DateTimeFormatter
+import java.time.{Duration, Instant}
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
 
 class TwitchApiActor(clientId: String, sharding: ClusterSharding, context: ActorContext[TwitchApiActor.Command])(implicit system: ActorSystem[_]) {

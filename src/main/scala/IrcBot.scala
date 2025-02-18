@@ -1,29 +1,26 @@
 package pl.sknikod.streamscout
 
 import Channels.MAX_CHANNELS
+import IrcBot.*
+import infrastructure.kafka.{KafkaProducerConfig, Message}
+import token.{TwitchToken, TwitchTokenActor}
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import akka.actor.typed.{ActorSystem, Behavior}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
 import akka.util.Timeout
 import io.circe.*
-import io.circe.generic.auto.*
 import io.circe.parser.*
-import io.github.cdimascio.dotenv.Dotenv
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.pircbotx.hooks.ListenerAdapter
 import org.pircbotx.hooks.events.MessageEvent
 import org.pircbotx.{Configuration, PircBotX}
-import pl.sknikod.streamscout.IrcBot.{Command, JoinChannel, LeaveChannel, Start, TokenUpdated}
-import pl.sknikod.streamscout.infrastructure.kafka.{KafkaProducerConfig, Message}
-import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor}
 
 import java.time.{Instant, LocalDateTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{BlockingQueue, Executors, LinkedBlockingQueue, TimeUnit}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.io.Source
-import scala.jdk.CollectionConverters.*
 import scala.util.{Failure, Success}
 
 case class Channels (channelsName: Set[String]) {
@@ -94,7 +91,7 @@ class IrcBot(context: ActorContext[IrcBot.Command], channels: Channels, delaySec
 
   private def initializeBot(oauthToken: String): Unit = {
     val config: Configuration = new Configuration.Builder()
-      .setName("my_bot")
+      .setName("stream_scout_bot")
       .setServerPassword(s"oauth:$oauthToken")
       .addServer("irc.chat.twitch.tv", 6667)
       .addListener(new TwitchListener(kafkaProducer, clientId))

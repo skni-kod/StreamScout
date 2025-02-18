@@ -1,14 +1,15 @@
 package pl.sknikod.streamscout
 package projections
 
+import infrastructure.kafka.Message
+
 import akka.Done
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.Handler
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
-import com.datastax.oss.driver.api.core.cql.{BoundStatement, PreparedStatement}
-import pl.sknikod.streamscout.infrastructure.kafka.Message
+import com.datastax.oss.driver.api.core.cql.PreparedStatement
 
-import java.time.{Instant, LocalDateTime, ZoneId}
+import java.time.{Instant, ZoneId}
 import scala.concurrent.{ExecutionContext, Future}
 
 class LastMessageProjection(session: CassandraSession)(implicit ec: ExecutionContext)

@@ -3,22 +3,20 @@ package projections
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.Handler
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import com.datastax.oss.driver.api.core.cql.PreparedStatement
-import pl.sknikod.streamscout.infrastructure.kafka.Message
-
-import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration._
-import scala.util.{Failure, Success}
-import scala.collection.mutable
-import scala.jdk.CollectionConverters.*
-import sttp.client3.*
-import sttp.client3.circe.*
 import io.circe.generic.auto.*
+import sttp.client3.*
 import sttp.client3.asynchttpclient.future.AsyncHttpClientFutureBackend
+import sttp.client3.circe.*
+
+import scala.collection.mutable
+import scala.concurrent.duration.*
+import scala.concurrent.{ExecutionContext, Future}
+import scala.jdk.CollectionConverters.*
+import scala.util.{Failure, Success}
 
 case class StreamerData(streamer: String, count: Int)
 

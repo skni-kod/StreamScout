@@ -6,7 +6,7 @@ import infrastructure.kafka.Message
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
+import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 import java.time.ZoneId

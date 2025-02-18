@@ -8,17 +8,12 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
-import pl.sknikod.streamscout.token.TwitchTokenActor.RefreshToken
 import sttp.client3.SttpBackend
 import sttp.client3.asynchttpclient.future.AsyncHttpClientFutureBackend
 
-import java.time.{Duration, ZoneId}
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
-import java.util.concurrent.TimeUnit
 import scala.concurrent.Future
-import scala.jdk.CollectionConverters.*
 import scala.concurrent.duration.DurationInt
+import scala.jdk.CollectionConverters.*
 
 object RecommendedStreamersActor {
 

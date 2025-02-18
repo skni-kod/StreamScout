@@ -1,20 +1,19 @@
 package pl.sknikod.streamscout
 
-import akka.actor.typed.{ActorRef, Behavior}
+import token.{TwitchToken, TwitchTokenActor}
+
+import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.{Behaviors, TimerScheduler}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef, EntityTypeKey}
-import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor}
+import akka.util.Timeout
+import io.circe.Decoder
+import io.circe.generic.semiauto.deriveDecoder
 import sttp.client3.circe.asJson
 import sttp.client3.{HttpClientSyncBackend, Identity, SttpBackend, UriContext, basicRequest}
 
 import scala.collection.immutable.Queue
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.*
-import akka.util.Timeout
-import io.circe.Decoder
-import io.circe.generic.semiauto.deriveDecoder
-import io.github.cdimascio.dotenv.Dotenv
-
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 object ChannelWriteActor {
@@ -139,23 +138,19 @@ object ChannelWriteActor {
     combinedFuture.onComplete {
       case Success((Some(senderId), Some(broadcasterId))) =>
         run(senderId, broadcasterId)
-      case Success((None, Some(id2))) =>
-        println(s"Channel ID for user1 not found")
-        println(s"Channel ID for user2: $id2")
-      case Success((Some(id1), None)) =>
-        println(s"Channel ID for user1: $id1")
-        println(s"Channel ID for user2 not found")
+      case Success((None, Some(broadcasterId))) =>
+        println(s"Channel ID for sender not found")
+        println(s"Channel ID for broadcaster: $broadcasterId")
+      case Success((Some(senderId), None)) =>
+        println(s"Channel ID for sender: $senderId")
+        println(s"Channel ID for broadcaster not found")
       case Success((None, None)) =>
         println("Both channel IDs not found")
       case Failure(exception) =>
         println(s"Failed to retrieve channel IDs: ${exception.getMessage}")
     }
 
-    // TODO: change broadcaster_id and sender_id to real data
     def run(senderId: String, broadcasterId: String) =
-      // TODO: delete
-      val dotenv: Dotenv = Dotenv.load()
-      val channelId: String = dotenv.get("TWITCH_CHANNEL_ID")
 
       val request = basicRequest
         .post(uri"https://api.twitch.tv/helix/chat/messages")
@@ -164,8 +159,8 @@ object ChannelWriteActor {
         .header("Content-Type", "application/json")
         .body(
           s"""{
-             |  "broadcaster_id": "$channelId",
-             |  "sender_id": "$channelId",
+             |  "broadcaster_id": "$broadcasterId",
+             |  "sender_id": "$senderId",
              |  "message": "$message"
              |}""".stripMargin
         )

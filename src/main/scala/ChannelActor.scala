@@ -1,14 +1,14 @@
 package pl.sknikod.streamscout
 
+import handlers.*
+import infrastructure.kafka.Message
+
 import akka.actor.typed.scaladsl.{Behaviors, Routers}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
-import akka.persistence.journal.EventAdapter
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
-import pl.sknikod.streamscout.handlers.{ChannelSentimentActor, HelpActor, LastMessageActor, LastSeenActor, RecommendedStreamersActor, TestPingActor, Top10PlActor, TopWatchtimeActor, UptimeActor, UserSentimentActor, ViewersCountActor, WatchtimeActor}
-import pl.sknikod.streamscout.infrastructure.kafka.Message
 
 import scala.concurrent.ExecutionContext
 
@@ -25,39 +25,10 @@ object ChannelActor {
   def commandHandler(routers: Map[String, ActorRef[Command]])(channelName: String): (State, Command) => Effect[Event, State] = (state, command) =>
     command match {
       case NewMessage(message, replyTo, writeActorRef) =>
-        routers.get("ping").foreach(_ ! TestPingActor.TestMessage(message, writeActorRef))
-        if (message.content.contains("$uptime")) {
-          routers.get("uptime").foreach(_ ! UptimeActor.GetUptime(message, writeActorRef))
-        }
-        if (message.content.contains("$viewers")) {
-          routers.get("viewers").foreach(_ ! ViewersCountActor.GetViewersCount(message, writeActorRef))
-        }
-        if (message.content.contains("$top10pl")) {
-          routers.get("top10pl").foreach(_ ! Top10PlActor.GetTop10Pl(message, writeActorRef))
-        }
-        if (message.content.contains("$topwatchtime")) {
-          routers.get("topwatchtime").foreach(_ ! TopWatchtimeActor.GetTopWatchtime(message, writeActorRef))
-        }
-        if (message.content.contains("$watchtime")) {
-          routers.get("watchtime").foreach(_ ! WatchtimeActor.GetWatchtime(message, writeActorRef))
-        }
-        if (message.content.contains("$lastseen")) {
-          routers.get("lastseen").foreach(_ ! LastSeenActor.GetLastSeen(message, writeActorRef))
-        }
-        if (message.content.contains("$help")) {
-          routers.get("help").foreach(_ ! HelpActor.GetHelp(message, writeActorRef))
-        }
-        if (message.content.contains("$lastmessage")) {
-          routers.get("lastmessage").foreach(_ ! LastMessageActor.GetLastMessage(message, writeActorRef))
-        }
-        if (message.content.contains("$recommended")) {
-          routers.get("recommended").foreach(_ ! RecommendedStreamersActor.GetRecommendedStreams(message, writeActorRef))
-        }
-        if (message.content.contains("$usersentiment")) {
-          routers.get("usersentiment").foreach(_ ! UserSentimentActor.GetUserSentiment(message, writeActorRef))
-        }
-        if (message.content.contains("$channelsentiment")) {
-          routers.get("channelsentiment").foreach(_ ! ChannelSentimentActor.GetChannelSentiment(message, writeActorRef))
+        commandMappings.foreach { case (cmd, (routerKey, msgCreator)) =>
+          if (message.content.contains(cmd)) {
+            routers.get(routerKey).foreach(_ ! msgCreator(message, writeActorRef))
+          }
         }
         Effect.persist(MessageAdded(message))
           .thenReply(replyTo)(_ => true)
@@ -68,10 +39,23 @@ object ChannelActor {
       case MessageAdded(message) =>
         state.copy(messages = message :: state.messages)
 
+  private val commandMappings = Map(
+    "$uptime" -> ("uptime", (msg: Message, ref: EntityRef[ChannelWriteActor.Command]) => UptimeActor.GetUptime(msg, ref)),
+    "$viewers" -> ("viewers", (msg, ref) => ViewersCountActor.GetViewersCount(msg, ref)),
+    "$top10pl" -> ("top10pl", (msg, ref) => Top10PlActor.GetTop10Pl(msg, ref)),
+    "$topwatchtime" -> ("topwatchtime", (msg, ref) => TopWatchtimeActor.GetTopWatchtime(msg, ref)),
+    "$watchtime" -> ("watchtime", (msg, ref) => WatchtimeActor.GetWatchtime(msg, ref)),
+    "$lastseen" -> ("lastseen", (msg, ref) => LastSeenActor.GetLastSeen(msg, ref)),
+    "$help" -> ("help", (msg, ref) => HelpActor.GetHelp(msg, ref)),
+    "$lastmessage" -> ("lastmessage", (msg, ref) => LastMessageActor.GetLastMessage(msg, ref)),
+    "$recommended" -> ("recommended", (msg, ref) => RecommendedStreamersActor.GetRecommendedStreams(msg, ref)),
+    "$usersentiment" -> ("usersentiment", (msg, ref) => UserSentimentActor.GetUserSentiment(msg, ref)),
+    "$channelsentiment" -> ("channelsentiment", (msg, ref) => ChannelSentimentActor.GetChannelSentiment(msg, ref))
+  )
+
   def apply(channelName: String, sharding: ClusterSharding, session: CassandraSession)(implicit ec: ExecutionContext): Behavior[Command] =
     Behaviors.setup { context =>
       val routers: Map[String, ActorRef[Command]] = Map(
-        "ping" -> context.spawn(Routers.pool(5)(TestPingActor()), "pingRouter"),
         "uptime" -> context.spawn(Routers.pool(5)(UptimeActor(sharding)), "uptimeRouter"),
         "viewers" -> context.spawn(Routers.pool(5)(ViewersCountActor(sharding)), "viewersRouter"),
         "top10pl" -> context.spawn(Routers.pool(5)(Top10PlActor(sharding)), "top10plRouter"),
