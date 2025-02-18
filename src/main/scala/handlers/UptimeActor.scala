@@ -1,17 +1,18 @@
 package pl.sknikod.streamscout
 package handlers
 
+import ChannelActor.Command
+import ChannelWriteActor.SendMessage
+import infrastructure.kafka.Message
+
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
 import akka.util.Timeout
-import pl.sknikod.streamscout.ChannelActor.Command
-import pl.sknikod.streamscout.ChannelWriteActor.{SendMessage, shard}
-import pl.sknikod.streamscout.infrastructure.kafka.Message
 
 import java.time.Duration
+import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContext, Future}
-import concurrent.duration.DurationInt
 import scala.util.Success
 
 object UptimeActor {

@@ -4,27 +4,20 @@ package infrastructure.kafka
 import akka.actor.typed.ActorSystem
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.scaladsl.Consumer.Control
+import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
 import akka.stream.Materializer
-import io.circe.Json
-import org.apache.kafka.clients.producer.{KafkaProducer, Producer, ProducerRecord, RecordMetadata}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
-import org.apache.kafka.common.serialization.{Deserializer, Serializer}
-import io.circe.syntax.*
+import akka.stream.scaladsl.Source
 import io.circe.generic.auto.*
 import io.circe.parser.*
+import io.circe.syntax.*
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, NewTopic}
-
-import java.util.{Collections, Properties}
-import org.apache.kafka.common.serialization.StringSerializer
-import org.apache.kafka.common.serialization.StringDeserializer
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.producer.{Producer, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer}
 
 import java.time.LocalDateTime
-import java.util.Properties
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
-import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
-import akka.stream.scaladsl.Source
-
-import scala.util.{Failure, Success}
+import java.util.{Collections, Properties}
+import scala.concurrent.{ExecutionContext, Future}
 
 case class Message(channel: String, user: String, content: String, date: LocalDateTime, clientId: String)
 

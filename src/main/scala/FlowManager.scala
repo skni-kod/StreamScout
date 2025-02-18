@@ -1,15 +1,16 @@
 package pl.sknikod.streamscout
 
+import infrastructure.kafka.KafkaProducerConfig
+import token.{TwitchToken, TwitchTokenActor, TwitchTokenDAO}
+
 import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.cluster.sharding.typed.ClusterShardingSettings
 import akka.cluster.sharding.typed.ClusterShardingSettings.PassivationStrategySettings
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity}
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
-import pl.sknikod.streamscout.infrastructure.kafka.KafkaProducerConfig
-import pl.sknikod.streamscout.token.{TwitchToken, TwitchTokenActor, TwitchTokenDAO}
 
+import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext}
-import concurrent.duration.DurationInt
 
 class FlowManager(sharding: ClusterSharding, session: CassandraSession)(implicit ec: ExecutionContext) {
   private val tokenDao = new TwitchTokenDAO(session)

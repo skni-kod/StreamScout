@@ -1,16 +1,16 @@
 package pl.sknikod.streamscout
 package handlers
 
+import ChannelActor.Command
 import infrastructure.kafka.Message
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.sharding.typed.scaladsl.EntityRef
-import pl.sknikod.streamscout.ChannelActor.Command
-import sttp.client3.{Response, ResponseException, SttpBackend, UriContext, basicRequest}
-import sttp.client3.asynchttpclient.future.AsyncHttpClientFutureBackend
 import io.circe.generic.auto.*
+import sttp.client3.asynchttpclient.future.AsyncHttpClientFutureBackend
 import sttp.client3.circe.asJson
+import sttp.client3.{Response, ResponseException, SttpBackend, UriContext, basicRequest}
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
