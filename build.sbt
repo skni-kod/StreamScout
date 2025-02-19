@@ -1,6 +1,8 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / scalaVersion := "3.3.0"
 
+javacOptions := Seq("--release", "18")
+
 val akkaVersion = "2.10.1"
 val akkaHttpVersion = "10.7.0"
 val akkaPersistenceVersion = "2.10.1"
@@ -14,10 +16,19 @@ val dotenvVersion = "5.2.2"
 
 resolvers += "Akka Repository" at "https://repo.akka.io/maven/"
 
+assembly / mainClass := Some("pl.sknikod.streamscout.TwitchClusterApp")
+
 lazy val root = (project in file("."))
   .settings(
     name := "StreamScout",
     idePackagePrefix := Some("pl.sknikod.streamscout"),
+    assembly / assemblyJarName := "stream-scout-app-assembly-0.1.0-SNAPSHOT.jar",
+    assembly / assemblyMergeStrategy := {
+      case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
+      case PathList("META-INF", "versions", xs @ _*) => MergeStrategy.discard
+      case PathList("reference.conf") => MergeStrategy.concat
+      case x => MergeStrategy.first
+    },
     libraryDependencies ++= Seq(
       // Akka dependencies
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,

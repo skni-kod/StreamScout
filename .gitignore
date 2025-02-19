@@ -3,6 +3,7 @@
 target
 project/project
 project/target
+.sbtopts
 
 docs.txt
 .env

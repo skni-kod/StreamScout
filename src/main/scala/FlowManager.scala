@@ -39,7 +39,7 @@ class FlowManager(sharding: ClusterSharding, session: CassandraSession)(implicit
   }
 
   def initializeFlow()(implicit system: ActorSystem[_]) : Unit = {
-    Channels.fromJsonFile("local_channels.json") match
+    Channels.fromJsonFile("channels.json") match
       case Left(error) =>
         println(s"Error loading channels: $error")
       case Right(channels) =>
