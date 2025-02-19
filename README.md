@@ -36,7 +36,7 @@ Aby uruchomić projekt, wykonaj następujące kroki:
 1. Sklonuj repozytorium:
    `git clone https://github.com/skni-kod/StreamScout.git`
 2. Skonfiguruj pliki `.env` i `.sbtopts`, korzystając z przykładów w plikach `.env.example` i `.sbtopts.example`
-3. Dodaj listę streamerów, na których bot będzie aktywny w pliku `src/resources/channels.json` (limit 50 kanałów / token)
+3. Dodaj listę streamerów, na których bot będzie aktywny w pliku `src/main/resources/channels.json` (limit 50 kanałów / token)
 4. Uruchom projekt i kontenery za pomocą skryptu `./run.sh`
 ---
 ### Technologie:
