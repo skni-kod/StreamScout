@@ -28,7 +28,7 @@ Przed rozpoczęciem upewnij się, że masz zainstalowane następujące narzędzi
 - **Java JDK 18**
 - **sbt 1.10.7**
 - **Docker**
-
+---
 ### Uruchomienie
 
 Aby uruchomić projekt, wykonaj następujące kroki:
@@ -38,7 +38,7 @@ Aby uruchomić projekt, wykonaj następujące kroki:
 2. Skonfiguruj pliki `.env` i `.sbtopts`, korzystając z przykładów w plikach `.env.example` i `.sbtopts.example`
 3. Dodaj listę streamerów, na których bot będzie aktywny w pliku `src/resources/channels.json` (limit 50 kanałów / token)
 4. Uruchom projekt i kontenery za pomocą skryptu `./run.sh`
-
+---
 ### Technologie:
 - Scala
 - Akka
